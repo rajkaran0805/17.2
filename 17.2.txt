@@ -1,0 +1,140 @@
+setwd ("C:/Users/Admin/Desktop/acadgild/drive-download-20170810T095437Z-001/Assignment_17")
+getwd ()
+install.packages("xlsx")
+install.packages("rJava")
+install.packages("xlsxjars")
+Dataset <- read.csv ("Dataset.csv",quote = "\"", header=TRUE ,skipNul = TRUE)
+head (Dataset)
+
+Dataset_new <- Dataset
+
+str (Dataset)
+
+#Summary Statistics
+summary (Dataset)
+
+#Checking for Missing Values
+
+for (i in 1:12)
+{
+  print(sum(is.na(Dataset[,i])))
+}
+
+#Variable transformation
+Dataset$Cruise <- as.factor (Dataset$Cruise)
+Dataset$Sound <- as.factor (Dataset$Sound)
+Dataset$Leather <- as.factor (Dataset$Leather)
+
+#Outlier detection
+stats_out <- boxplot.stats(Dataset$Price)$out
+stats_out
+boxplot (Dataset$Price, horizontal=T)
+#Plotting Price~Mileage
+plot (Dataset$Price~Dataset$Mileage)
+#Subsetting dataset with Price > 52000
+cars_r_out <- Dataset[Dataset$Price>52000,]
+cars_r_out
+#Outlier values- Cars with Price>52000 are on the expensive side and can't be considered as outliers
+plot (cars_r_out$Price~cars_r_out$Mileage)
+
+#Creating a simple Linear Regression Model with Price as DV and Mileage as IV
+
+cars_r_lm1 <- lm (Price~Mileage,data=Dataset) 
+cars_r_lm1
+summary(cars_r_lm1)# R-sq : 0.02046 or 2%
+
+#Creating a simple Linear Regression Model with Price as DV and Mileage as IV for cars with Price>52000
+cars_r_lm2 <- lm (Price~Mileage, data=cars_r_out)
+cars_r_lm2
+summary(cars_r_lm2)# R-sq : 0.986 or 98.6%
+
+#Create dummy variables for Make variable
+class (Dataset$Make)
+Make_factor <- model.matrix(~Dataset$Make -1)
+head(Make_factor)
+
+#Variable with k levels require only k-1 dummy variables
+Make_factor <- data.frame(Make_factor)#Converting from matrix to data.frame
+factor_length <- length(names(Make_factor))-1
+Dataset_new <- cbind (Dataset_new,Make_factor[1:factor_length] )
+head (Dataset_new)
+
+#Multiple Linear Regression
+cars_r_mlm1 <- lm (Price~Mileage+Cylinder+Liter+Doors+Cruise+Sound+Leather+
+                     Dataset.MakeBuick+Dataset.MakeCadillac+
+                     Dataset.MakeChevrolet+Dataset.MakePontiac+Dataset.MakeSAAB,
+                   data=Dataset_new)
+cars_r_mlm1
+summary(cars_r_mlm1)
+
+#Create dummy variables for Type Variable and including in the next iteration of MLR
+class (Dataset_new$Type)
+Type_factor <- model.matrix(~Dataset_new$Type -1)
+head(Type_factor)
+
+#Variable with k levels require only k-1 dummy variables
+Type_factor <- data.frame(Type_factor)#Converting from matrix to data.frame
+factor_length1 <- length(names(Type_factor))-1
+Dataset_new <- cbind (Dataset_new,Type_factor[1:factor_length1] )
+head (Dataset_new)
+
+#Multiple Linear Regression
+cars_r_mlm2 <- lm (Price~Mileage+Liter+Doors+
+                     Dataset.MakeBuick+Dataset.MakeCadillac+
+                     Dataset.MakeSAAB+Dataset_new.TypeConvertible+
+                     Dataset_new.TypeCoupe+Dataset_new.TypeHatchback+
+                     Dataset_new.TypeSedan,
+                   data=Dataset_new)
+cars_r_mlm2
+summary(cars_r_mlm2)
+
+#Second iteration of MLR with added Type variable has resulted in 
+#better R-sq and Adj R-sq
+#All variables included are significant in predicting the Price
+
+#Predicted value from MLR cars_r_mlm2
+Dataset_p <- predict (cars_r_mlm2)
+#Residual value
+Dataset_res <- resid(cars_r_mlm2)
+
+#Take the log of Price and generate the regression equation
+#Multiple Linear Regression
+cars_r_mlm3 <- lm (log(Price)~Mileage+Liter+Doors+
+                     Dataset.MakeBuick+Dataset.MakeCadillac+
+                     Dataset.MakeSAAB+Dataset_new.TypeConvertible+
+                     Dataset_new.TypeHatchback+
+                     Dataset_new.TypeSedan,
+                   data=Dataset_new)
+cars_r_mlm3
+summary(cars_r_mlm3)
+#Log(Price) is giving a better R-sq and Adj R-sq over the above model
+#Therefore we can finalise on this model
+#All IV's are significant in predicting the log (Price)
+
+#Predicted value from MLR cars_r_mlm2
+Dataset_pl <- predict(cars_r_mlm3)
+#Residual value
+Dataset_resl <- resid(cars_r_mlm3)
+
+plot (Dataset_new$Price,Dataset_resl,xlab="Price",ylab="Residuals")
+
+plot (Dataset_pl,Dataset_resl,xlab="Pred Price",ylab="Residuals",abline (0,0))
+#Distribution above and below are not skewed and near symmetric 
+#So we can rule out heteroscedacity
+
+#Actual vs Predicted Price Plot
+plot (Dataset_new$Price, col="green",type="l")
+par (new=TRUE)
+plot (Dataset_pl,col="red",type="l")
+#The actual and predicted price are comparable and close
+
+par(mfrow=c(2,2))
+plot (cars_r_mlm3)
+
+par(mfrow=c(2,1))
+#Comparing the distribution of Residual of Price and Log(Price)
+hist (Dataset_res)
+hist (Dataset_resl)
+#Residual of Log(Price) is showing a better normal distribution that residual of Price without 
+#log transformation
+
